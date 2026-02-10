@@ -1,10 +1,34 @@
 #!/bin/sh
+
+topN=200
+print_pr_url=0
+
+helpFunction()
+{
+   echo ""
+   echo "Usage: $0 -t topN -u"
+   echo "\t-t Only output topN action items. 200 by default."
+   echo "\t-u Print PR URLs instead of just number"
+   echo "\t-? Help."
+   exit 1 # Exit script after printing help
+}
+
+while getopts "t:u?" opt
+do
+   case "$opt" in
+      t ) topN="$OPTARG" ;;
+      u ) print_pr_url=1 ;;
+      ? ) helpFunction ;; # Print helpFunction in case parameter is non-existent
+   esac
+done
+
+
           REPO=MariaDB/server
           set -euo pipefail
           /opt/homebrew/bin/gh pr list \
             --repo "$REPO" \
             --search 'is:open is:pr label:"External Contribution" draft:false' \
-            --limit 200 \
+            --limit "$topN" \
             -s all \
             --json number,title,reviewRequests,reviews,updatedAt \
             --jq '.[] | {number: .number, mdev: .title | if test("^MDEV-(?<a>[0-9]*).*") then capture("^MDEV-(?<a>[0-9]*).*").a else "" end, req_count_me: (.reviewRequests | map(select(.login == "gkodinov")) | length), req_count_others: (.reviewRequests | map(select(.login != "gkodinov")) | length), reviewed_by_me: (.reviews | map(select(.author.login == "gkodinov")) | length), approved_by_me: (.reviews | map(select(.author.login == "gkodinov" and .state == "APPROVED")) | length), reviewed_by_others: (.reviews | map(select(.author.login != "gkodinov" and .authorAssociation == "MEMBER")) | length), approved_by_others: (.reviews | map(select(.author.login != "gkodinov" and .authorAssociation == "MEMBER" and .state == "APPROVED")) | length), days_since_last_update: (((now - (.updatedAt | fromdateiso8601)) / (24 * 3600)) |round) }' > prs.json
@@ -120,21 +144,32 @@
             fi
 
             #print the outcome
-           
+
             if [[ -n "$comment" ]]; then
               state="$state: $comment"
             fi
+            if [[ "$print_pr_url" -eq 0 ]]; then
+              printf "PR#%d: " "$pr_number"
+            else
+              printf "https://github.com/MariaDB/server/pull/%d : " "$pr_number"
+              open "https://github.com/MariaDB/server/pull/$pr_number"
+            fi
+
             if [[ -z "$failure" && -z $action ]]; then
-              # echo "PR#$pr_number: $state"
+              # echo "$state"
               n_processed=$((n_processed+1))
             elif [[ -z "$failure" ]]; then
-              echo "PR#$pr_number: ACTION: $action. State=$state"
+              echo "ACTION: $action. State=$state"
               n_actionables=$((n_actionables+1))
             else
-              echo "PR#$pr_number: FAILURE=$failure, ACTION: $action. State=$state"
+              echo "FAILURE=$failure, ACTION: $action. State=$state"
               n_failures=$((n_failures+1))
             fi
             n_prs=$((n_prs+1))
+            n_actions=$((n_actionables + n_failures))
+            if [[ $n_actions -ge $topN ]]; then
+              exit 2 # Exit due to topN
+            fi
           done < prs.json
           
           # final tally
