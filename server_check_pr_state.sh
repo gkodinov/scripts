@@ -162,6 +162,9 @@ done
               else
                 printf "https://github.com/MariaDB/server/pull/%d : " "$pr_number"
                 open "https://github.com/MariaDB/server/pull/$pr_number"
+                if [[ ! ( -z "$mdev" ) ]]; then
+                  open "https://jira.mariadb.org/browse/MDEV-$mdev"
+                fi
               fi
             fi
 
