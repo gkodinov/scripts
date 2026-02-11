@@ -108,10 +108,18 @@ done
               action="$action Do preliminary review"
               n_states=$((n_states +1))
             fi
-            if [[ $approved -eq 0 && $request_count -eq 0 && $reviewed -gt 0 ]]; then
+            if [[ $approved -eq 0 && $request_count -eq 0 && $reviewed_by_me -eq 0 && $reviewed_by_others -gt 0 ]]; then
               state="OPEN"
               comment="with comments, needs preliminary review"
               action="$action Do preliminary review"
+              n_states=$((n_states +1))
+            fi
+            if [[ $approved -eq 0 && $request_count -eq 0 && $reviewed_by_me -gt 0 ]]; then
+              state="PRELIMINARY REVIEW"
+              comment="Waiting for the submitter to reply"
+              if [[ $days_since_last_update -ge 21 ]]; then
+                action="$action Nag the submitter"
+              fi
               n_states=$((n_states +1))
             fi
             if [[ $approved -eq 0 && $request_count_me -gt 0 && $request_count_others -eq 0 ]]; then
@@ -148,11 +156,13 @@ done
             if [[ -n "$comment" ]]; then
               state="$state: $comment"
             fi
-            if [[ "$print_pr_url" -eq 0 ]]; then
-              printf "PR#%d: " "$pr_number"
-            else
-              printf "https://github.com/MariaDB/server/pull/%d : " "$pr_number"
-              open "https://github.com/MariaDB/server/pull/$pr_number"
+            if [[ ! ( -z "$failure" && -z $action ) ]]; then
+              if [[ "$print_pr_url" -eq 0 ]]; then
+                printf "PR#%d: " "$pr_number"
+              else
+                printf "https://github.com/MariaDB/server/pull/%d : " "$pr_number"
+                open "https://github.com/MariaDB/server/pull/$pr_number"
+              fi
             fi
 
             if [[ -z "$failure" && -z $action ]]; then
