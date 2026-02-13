@@ -136,14 +136,32 @@ done
               action="$action Push, Push, Push"
               n_states=$((n_states +1))
             fi
+            if [[ $approved_by_me -gt 0 && $approved_by_others -eq 0 && request_count -eq 0 ]]; then
+              state="PRELIMINARY REVIEW DONE"
+              comment="assign final reviewer"
+              if [[ $days_since_last_update -ge 21 ]]; then
+                action="$action, assign final reviewer"
+              fi
+              n_states=$((n_states +1))
+            fi
+            if [[ $approved_by_me -gt 0 && $approved_by_others -eq 0 && request_count_others -gt 0 ]]; then
+              state="FINAL REVIEW"
+              comment="wait for the final review"
+              if [[ $days_since_last_update -ge 21 ]]; then
+                action="$action, nag the final reviewer"
+              fi
+              n_states=$((n_states +1))
+            fi
 
             if [[ -z "$state" ]]; then
               failure="$failure ###NO_STATE###"
               action="$action fix the state machine"
+              n_states=$((n_states +1))
             fi
             if [[ $n_states -gt 1 ]]; then
               failure="$failure ###STATE_CONFLICT###"
               action="$action, fix the state machine"
+              n_states=$((n_states +1))
             fi
 
             if [[ "$state" == "APPROVED" && "$jira_status" != "Approved" ]]; then
