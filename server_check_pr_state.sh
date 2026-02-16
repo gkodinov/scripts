@@ -13,6 +13,18 @@ helpFunction()
    exit 1 # Exit script after printing help
 }
 
+# Function to resolve the script path
+get_script_dir() {
+    local SOURCE=$0
+    while [ -h "$SOURCE" ]; do # Resolve $SOURCE until the file is no longer a symlink
+        DIR=$(cd -P "$(dirname "$SOURCE")" && pwd)
+        SOURCE=$(readlink "$SOURCE")
+        [[ $SOURCE != /* ]] && SOURCE=$DIR/$SOURCE # If $SOURCE was a relative symlink, resolve it relative to the symlink base directory
+    done
+    DIR=$(cd -P "$(dirname "$SOURCE")" && pwd)
+    echo "$DIR"
+}
+
 while getopts "t:u?" opt
 do
    case "$opt" in
@@ -24,6 +36,7 @@ done
 
 
           REPO=MariaDB/server
+          script_dir=$(get_script_dir)
           set -euo pipefail
           /opt/homebrew/bin/gh pr list \
             --repo "$REPO" \
@@ -31,7 +44,9 @@ done
             --limit 200 \
             -s all \
             --json number,title,reviewRequests,reviews,updatedAt \
-            --jq '.[] | {number: .number, mdev: .title | if test("^MDEV-(?<a>[0-9]*).*") then capture("^MDEV-(?<a>[0-9]*).*").a else "" end, req_count_me: (.reviewRequests | map(select(.login == "gkodinov")) | length), req_count_others: (.reviewRequests | map(select(.login != "gkodinov")) | length), reviewed_by_me: (.reviews | map(select(.author.login == "gkodinov")) | length), approved_by_me: (.reviews | map(select(.author.login == "gkodinov" and .state == "APPROVED")) | length), reviewed_by_others: (.reviews | map(select(.author.login != "gkodinov" and .authorAssociation == "MEMBER")) | length), approved_by_others: (.reviews | map(select(.author.login != "gkodinov" and .authorAssociation == "MEMBER" and .state == "APPROVED")) | length), days_since_last_update: (((now - (.updatedAt | fromdateiso8601)) / (24 * 3600)) |round) }' > prs.json
+            --jq '.[]' \
+             > raw.json
+          cat raw.json | jq -c -f $script_dir/server_check_pr_state.jq > prs.json
           n_prs=0
           n_failures=0
           n_processed=0
@@ -46,6 +61,7 @@ done
             reviewed_by_others=$(echo "$pr" | jq -r '.reviewed_by_others')
             approved_by_others=$(echo "$pr" | jq -r '.approved_by_others')
             days_since_last_update=$(echo "$pr" | jq -r '.days_since_last_update')
+            last_comment_by_me=$(echo "$pr" | jq -r '.last_comment_by_me')
             failure=''
             action=''
             jira_status=''
@@ -78,7 +94,7 @@ done
             state=''
             comment=''
             n_states=0
- 
+
             # set the state
 
             if [[ $approved_by_me -gt 0 && $approved_by_others -gt 0 && $request_count -eq 0 ]]; then
@@ -116,18 +132,21 @@ done
             fi
             if [[ $approved -eq 0 && $request_count -eq 0 && $reviewed_by_me -gt 0 ]]; then
               state="PRELIMINARY REVIEW"
-              comment="Waiting for the submitter to reply"
-              if [[ $days_since_last_update -ge 21 ]]; then
-                action="$action Nag the submitter"
+              if [[ $last_comment_by_me -eq "true" ]]; then
+                comment="Waiting for the submitter to reply"
+                if [[ $days_since_last_update -ge 21 ]]; then
+                  action="$action Nag the submitter"
+                fi
+              else
+                comment="Submitter replied"
+                action="$action Reply to the submitter"
               fi
               n_states=$((n_states +1))
             fi
             if [[ $approved -eq 0 && $request_count_me -gt 0 && $request_count_others -eq 0 ]]; then
               state="PRELIMINARY REVIEW"
-              comment="waiting for the submitter"
-              if [[ $days_since_last_update -ge 21 ]]; then
-                action='Nag submitter or close'
-              fi
+              comment="waiting for me"
+	      action='Reply to preliminary review'
               n_states=$((n_states +1))
             fi
             if [[ $approved_by_me -eq 0 && $approved_by_others -gt 0 && $request_count -eq 0 ]]; then
@@ -208,4 +227,5 @@ done
           printf "%s failures, " "$n_failures"
           printf "%s actionables, " "$n_actionables"
           echo $n_processed OK
-#          rm prs.json
+          rm prs.json
+          rm raw.json
