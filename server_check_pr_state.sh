@@ -38,6 +38,7 @@ done
           REPO=MariaDB/server
           script_dir=$(get_script_dir)
           set -euo pipefail
+#          if [[ 1 -eq 0 ]]; then
           /opt/homebrew/bin/gh pr list \
             --repo "$REPO" \
             --search 'is:open is:pr label:"External Contribution" draft:false' \
@@ -46,6 +47,7 @@ done
             --json number,title,reviewRequests,reviews,updatedAt \
             --jq '.[]' \
              > raw.json
+#          fi
           cat raw.json | jq -c -f $script_dir/server_check_pr_state.jq > prs.json
           n_prs=0
           n_failures=0
@@ -132,7 +134,7 @@ done
             fi
             if [[ $approved -eq 0 && $request_count -eq 0 && $reviewed_by_me -gt 0 ]]; then
               state="PRELIMINARY REVIEW"
-              if [[ $last_comment_by_me -eq "true" ]]; then
+              if [[ $last_comment_by_me = "true" ]]; then
                 comment="Waiting for the submitter to reply"
                 if [[ $days_since_last_update -ge 21 ]]; then
                   action="$action Nag the submitter"
