@@ -2,6 +2,8 @@
 
 topN=200
 print_pr_url=0
+fetch_pr_list=1
+delete_cache_files=1
 
 helpFunction()
 {
@@ -9,6 +11,8 @@ helpFunction()
    echo "Usage: $0 -t topN -u"
    echo "\t-t Only output topN action items. 200 by default."
    echo "\t-u Print PR URLs instead of just number"
+   echo "\t-n do not fetch PR list. rely on local files"
+   echo "\t-f do not delete local cache files"
    echo "\t-? Help."
    exit 1 # Exit script after printing help
 }
@@ -25,11 +29,13 @@ get_script_dir() {
     echo "$DIR"
 }
 
-while getopts "t:u?" opt
+while getopts "t:u?fn" opt
 do
    case "$opt" in
       t ) topN="$OPTARG" ;;
       u ) print_pr_url=1 ;;
+      n ) fetch_pr_list=0 ;;
+      f ) delete_cache_files=0 ;;
       ? ) helpFunction ;; # Print helpFunction in case parameter is non-existent
    esac
 done
@@ -37,16 +43,16 @@ done
 
           script_dir=$(get_script_dir)
           set -euo pipefail
-#          if [[ 1 -eq 0 ]]; then
-          /opt/homebrew/bin/gh pr list \
-            --repo "MariaDB/server" \
-            --search 'is:open is:pr label:"External Contribution" draft:false' \
-            --limit 200 \
-            -s all \
-            --json number,title,reviewRequests,reviews,updatedAt,author \
-            --jq '.[]' \
-             > raw.json
-#          fi
+          if [[ $fetch_pr_list -gt 0 ]]; then
+            /opt/homebrew/bin/gh pr list \
+              --repo "MariaDB/server" \
+              --search 'is:open is:pr label:"External Contribution" draft:false' \
+              --limit 200 \
+              -s all \
+              --json number,title,reviewRequests,reviews,updatedAt,author \
+              --jq '.[]' \
+               > raw.json
+          fi
           cat raw.json | jq -c -f $script_dir/server_check_pr_state.jq > prs.json
           n_prs=0
           n_failures=0
@@ -103,14 +109,6 @@ done
               state="APPROVED"
               action="$action Push, Push, Push"
               n_states=$((n_states +1))
-            fi
-            if [[ $approved_by_me -gt 0 && $request_count_others -gt 0 ]]; then
-              state="FINAL REVIEW"
-              comment="waiting for the final reviewer"
-              n_states=$((n_states +1))
-              if [[ $days_since_last_update -ge 21 ]]; then
-                action='Nag final reviewer'
-              fi
             fi
             if [[ $approved_by_me -eq 0 && $request_count_others -gt 0 ]]; then
               state="FINAL REVIEW"
@@ -229,5 +227,7 @@ done
           printf "%s failures, " "$n_failures"
           printf "%s actionables, " "$n_actionables"
           echo $n_processed OK
-          rm prs.json
-          rm raw.json
+          if [[ $delete_cache_files -gt 0 ]]; then
+            rm prs.json
+            rm raw.json
+          fi
