@@ -35,16 +35,15 @@ do
 done
 
 
-          REPO=MariaDB/server
           script_dir=$(get_script_dir)
           set -euo pipefail
 #          if [[ 1 -eq 0 ]]; then
           /opt/homebrew/bin/gh pr list \
-            --repo "$REPO" \
+            --repo "MariaDB/server" \
             --search 'is:open is:pr label:"External Contribution" draft:false' \
             --limit 200 \
             -s all \
-            --json number,title,reviewRequests,reviews,updatedAt \
+            --json number,title,reviewRequests,reviews,updatedAt,author \
             --jq '.[]' \
              > raw.json
 #          fi
@@ -64,6 +63,7 @@ done
             approved_by_others=$(echo "$pr" | jq -r '.approved_by_others')
             days_since_last_update=$(echo "$pr" | jq -r '.days_since_last_update')
             last_comment_by_me=$(echo "$pr" | jq -r '.last_comment_by_me')
+            last_comment_by_author=$(echo "$pr" | jq -r '.last_comment_by_author')
             failure=''
             action=''
             jira_status=''
@@ -134,7 +134,7 @@ done
             fi
             if [[ $approved -eq 0 && $request_count -eq 0 && $reviewed_by_me -gt 0 ]]; then
               state="PRELIMINARY REVIEW"
-              if [[ $last_comment_by_me = "true" ]]; then
+              if [[ $last_comment_by_me -gt $last_comment_by_author ]]; then
                 comment="Waiting for the submitter to reply"
                 if [[ $days_since_last_update -ge 21 ]]; then
                   action="$action Nag the submitter"

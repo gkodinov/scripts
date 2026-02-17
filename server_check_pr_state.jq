@@ -63,17 +63,24 @@
       )                                                 
       | round                                           
     ),
-  last_comment_by_me: 
-    (
+  last_comment_by_me:
       (
-        .reviews
-          | map({ 
-              "author": .author,
-              "submitted": (.submittedAt | fromdateiso8601)
-            })
-          | max_by(.submitted)
-          | .author.login
+        (
+          .reviews
+            | map(select(.author.login == "gkodinov"))
+            | max_by(.submittedAt | fromdateiso8601)
+            | .submittedAt
+        )
+        | if ((. | length) > 0) then . | fromdateiso8601 else 0 end
+      ),
+  last_comment_by_author:
+      (
+        (
+          .reviews
+            | map(select(.authorAssociation == "CONTRIBUTOR"))
+            | max_by(.submittedAt | fromdateiso8601)
+            | .submittedAt
+        )
+        | if ((. | length) > 0) then . | fromdateiso8601 else 0 end
       )
-      == "gkodinov"
-    )
 }
