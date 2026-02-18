@@ -83,6 +83,9 @@ done
               curl -s --header @/Users/gkodinov/.jira.mariadb.org/curl_headers.txt https://jira.mariadb.org/rest/api/2/issue/MDEV-$mdev | jq '{ status: .fields.status.name, assignee: .fields.assignee.emailAddress}' > mdev.json
               jira_status=$(cat mdev.json | jq -r '.status')
               jira_assignee=$(cat mdev.json | jq -r '.assignee')
+              if [[ $delete_cache_files -gt 0 ]]; then
+                rm mdev.json
+              fi
               if [[ -z "$jira_status" ]]; then
                 failure="$failure ### No Jira status ###"
                 action="fix the script"
@@ -146,7 +149,7 @@ done
             if [[ $approved -eq 0 && $request_count_me -gt 0 && $request_count_others -eq 0 ]]; then
               state="PRELIMINARY REVIEW"
               comment="waiting for me"
-	      action='Reply to preliminary review'
+	      action='Reply to the preliminary review request'
               n_states=$((n_states +1))
             fi
             if [[ $approved_by_me -eq 0 && $approved_by_others -gt 0 && $request_count -eq 0 ]]; then
