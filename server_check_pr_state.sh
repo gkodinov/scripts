@@ -146,7 +146,7 @@ done
               fi
               n_states=$((n_states +1))
             fi
-            if [[ $approved -eq 0 && $request_count_me -gt 0 && $request_count_others -eq 0 ]]; then
+            if [[ $request_count_me -gt 0 && $request_count_others -eq 0 ]]; then
               state="PRELIMINARY REVIEW"
               comment="waiting for me"
 	      action='Reply to the preliminary review request'
@@ -166,7 +166,7 @@ done
               fi
               n_states=$((n_states +1))
             fi
-            if [[ $approved_by_me -gt 0 && $approved_by_others -eq 0 && request_count_others -gt 0 ]]; then
+            if [[ $approved_by_me -gt 0 && $request_count_me -eq 0 && request_count_others -gt 0 ]]; then
               state="FINAL REVIEW"
               comment="wait for the final review"
               if [[ $days_since_last_update -ge 21 ]]; then
