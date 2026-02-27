@@ -70,13 +70,24 @@ done
             days_since_last_update=$(echo "$pr" | jq -r '.days_since_last_update')
             last_comment_by_me=$(echo "$pr" | jq -r '.last_comment_by_me')
             last_comment_by_author=$(echo "$pr" | jq -r '.last_comment_by_author')
+            state=''
+            comment=''
             failure=''
             action=''
             jira_status=''
             jira_assignee=''
+            request_count=$((request_count_me + request_count_others))
+            reviewed=$((reviewed_by_me + reviewed_by_others))
+            approved=$((approved_by_me + approved_by_others))
+            n_states=0
+
             if [[ -z "$mdev" ]]; then
-              failure="$failure ###no MDEV!###"
-              action="Add the MDEV-NNNNN prefix"
+              state="NO MDEV"
+              comment="Add the MDEV-NNNNN prefix"
+              if [[ $reviewed_by_me -eq 0 && $approved_by_me -eq 0 ]]; then
+                action="Add MDEV"
+              fi
+              n_states=$((n_states +1))
             else
               # get the MDEV state
 
@@ -90,105 +101,91 @@ done
                 failure="$failure ### No Jira status ###"
                 action="fix the script"
               fi
-            fi
-#            echo "PR#$pr_number is:"
-#            echo "  request_count_me: $request_count_me"
-#            echo "  request_count_others: $request_count_others"
-#            echo "  reviewed by me: $reviewed_by_me"
-#            echo "  approved by me: $approved_by_me"
-#            echo "  reviewed by others: $reviewed_by_others"
-#            echo "  approved by others: $approved_by_others"
-            request_count=$((request_count_me + request_count_others))
-            reviewed=$((reviewed_by_me + reviewed_by_others))
-            approved=$((approved_by_me + approved_by_others))
 
-            state=''
-            comment=''
-            n_states=0
+              # set the state
 
-            # set the state
-
-            if [[ $approved_by_me -gt 0 && $approved_by_others -gt 0 && $request_count -eq 0 ]]; then
-              state="APPROVED"
-              action="$action Push, Push, Push"
-              n_states=$((n_states +1))
-            fi
-            if [[ $approved_by_me -eq 0 && $request_count_others -gt 0 ]]; then
-              state="FINAL REVIEW"
-              comment="sans preliminary review, waiting for the final reviewer"
-              n_states=$((n_states +1))
-              if [[ $days_since_last_update -ge 21 ]]; then
-                action='Nag final reviewer'
+              if [[ $approved_by_me -gt 0 && $approved_by_others -gt 0 && $request_count -eq 0 ]]; then
+                state="APPROVED"
+                action="$action Push, Push, Push"
+                n_states=$((n_states +1))
               fi
-            fi
-            if [[ $approved -eq 0 && $request_count -eq 0 && $reviewed -eq 0 ]]; then
-              state="OPEN"
-              comment="need preliminary review"
-              action="$action Do preliminary review"
-              n_states=$((n_states +1))
-            fi
-            if [[ $approved -eq 0 && $request_count -eq 0 && $reviewed_by_me -eq 0 && $reviewed_by_others -gt 0 ]]; then
-              state="OPEN"
-              comment="with comments, needs preliminary review"
-              action="$action Do preliminary review"
-              n_states=$((n_states +1))
-            fi
-            if [[ $approved -eq 0 && $request_count -eq 0 && $reviewed_by_me -gt 0 ]]; then
-              state="PRELIMINARY REVIEW"
-              if [[ $last_comment_by_me -gt $last_comment_by_author ]]; then
-                comment="Waiting for the submitter to reply"
+              if [[ $approved_by_me -eq 0 && $request_count_others -gt 0 ]]; then
+                state="FINAL REVIEW"
+                comment="sans preliminary review, waiting for the final reviewer"
+                n_states=$((n_states +1))
                 if [[ $days_since_last_update -ge 21 ]]; then
-                  action="$action Nag the submitter"
+                  action='Nag final reviewer'
                 fi
-              else
-                comment="Submitter replied"
-                action="$action Reply to the submitter"
               fi
-              n_states=$((n_states +1))
-            fi
-            if [[ $request_count_me -gt 0 && $request_count_others -eq 0 ]]; then
-              state="PRELIMINARY REVIEW"
-              comment="waiting for me"
-	      action='Reply to the preliminary review request'
-              n_states=$((n_states +1))
-            fi
-            if [[ $approved_by_me -eq 0 && $approved_by_others -gt 0 && $request_count -eq 0 ]]; then
-              state="APPROVED"
-              comment="sans preliminary review"
-              action="$action Push, Push, Push"
-              n_states=$((n_states +1))
-            fi
-            if [[ $approved_by_me -gt 0 && $approved_by_others -eq 0 && request_count -eq 0 ]]; then
-              state="PRELIMINARY REVIEW DONE"
-              comment="assign final reviewer"
-              if [[ $days_since_last_update -ge 21 ]]; then
-                action="$action, assign final reviewer"
+              if [[ $approved -eq 0 && $request_count -eq 0 && $reviewed -eq 0 ]]; then
+                state="OPEN"
+                comment="need preliminary review"
+                action="$action Do preliminary review"
+                n_states=$((n_states +1))
               fi
-              n_states=$((n_states +1))
-            fi
-            if [[ $approved_by_me -gt 0 && $request_count_me -eq 0 && request_count_others -gt 0 ]]; then
-              state="FINAL REVIEW"
-              comment="wait for the final review"
-              if [[ $days_since_last_update -ge 21 ]]; then
-                action="$action, nag the final reviewer"
+              if [[ $approved -eq 0 && $request_count -eq 0 && $reviewed_by_me -eq 0 && $reviewed_by_others -gt 0 ]]; then
+                state="OPEN"
+                comment="with comments, needs preliminary review"
+                action="$action Do preliminary review"
+                n_states=$((n_states +1))
               fi
-              n_states=$((n_states +1))
-            fi
+              if [[ $approved -eq 0 && $request_count -eq 0 && $reviewed_by_me -gt 0 ]]; then
+                state="PRELIMINARY REVIEW"
+                if [[ $last_comment_by_me -gt $last_comment_by_author ]]; then
+                  comment="Waiting for the submitter to reply"
+                  if [[ $days_since_last_update -ge 21 ]]; then
+                    action="$action Nag the submitter"
+                  fi
+                else
+                  comment="Submitter replied"
+                  action="$action Reply to the submitter"
+                fi
+                n_states=$((n_states +1))
+              fi
+              if [[ $request_count_me -gt 0 && $request_count_others -eq 0 ]]; then
+                state="PRELIMINARY REVIEW"
+                comment="waiting for me"
+                action='Reply to the preliminary review request'
+                n_states=$((n_states +1))
+              fi
+              if [[ $approved_by_me -eq 0 && $approved_by_others -gt 0 && $request_count -eq 0 ]]; then
+                state="APPROVED"
+                comment="sans preliminary review"
+                action="$action Push, Push, Push"
+                n_states=$((n_states +1))
+              fi
+              if [[ $approved_by_me -gt 0 && $approved_by_others -eq 0 && request_count -eq 0 ]]; then
+                state="PRELIMINARY REVIEW DONE"
+                comment="assign final reviewer"
+                if [[ $days_since_last_update -ge 21 ]]; then
+                  action="$action, assign final reviewer"
+                fi
+                n_states=$((n_states +1))
+              fi
+              if [[ $approved_by_me -gt 0 && $request_count_me -eq 0 && request_count_others -gt 0 ]]; then
+                state="FINAL REVIEW"
+                comment="wait for the final review"
+                if [[ $days_since_last_update -ge 21 ]]; then
+                  action="$action, nag the final reviewer"
+                fi
+                n_states=$((n_states +1))
+              fi
 
-            if [[ -z "$state" ]]; then
-              failure="$failure ###NO_STATE###"
-              action="$action fix the state machine"
-              n_states=$((n_states +1))
-            fi
-            if [[ $n_states -gt 1 ]]; then
-              failure="$failure ###STATE_CONFLICT###"
-              action="$action, fix the state machine"
-              n_states=$((n_states +1))
-            fi
+              if [[ -z "$state" ]]; then
+                failure="$failure ###NO_STATE###"
+                action="$action fix the state machine"
+                n_states=$((n_states +1))
+              fi
+              if [[ $n_states -gt 1 ]]; then
+                failure="$failure ###STATE_CONFLICT###"
+                action="$action, fix the state machine"
+                n_states=$((n_states +1))
+              fi
 
-            if [[ "$state" == "APPROVED" && "$jira_status" != "Approved" ]]; then
-              failure="$failure Jira status $jira_status doesn't match PR state APPROVED"
-              action="$action, update jira state to Approved"
+              if [[ "$state" == "APPROVED" && "$jira_status" != "Approved" ]]; then
+                failure="$failure Jira status $jira_status doesn't match PR state APPROVED"
+                action="$action, update jira state to Approved"
+              fi
             fi
 
             #print the outcome
