@@ -49,8 +49,7 @@
         | map(select(                                   
           .author.login != "gkodinov"                   
           and .authorAssociation == "MEMBER"            
-          and .state == "APPROVED                       
-        "))                                             
+          and .state == "APPROVED"))
         | length                                        
     ),                                                  
   days_since_last_update:                               
@@ -78,6 +77,26 @@
         (
           .reviews
             | map(select(.authorAssociation == "CONTRIBUTOR"))
+            | max_by(.submittedAt | fromdateiso8601)
+            | .submittedAt
+        )
+        | if ((. | length) > 0) then . | fromdateiso8601 else 0 end
+      ),
+  last_changes_requested:
+      (
+        (
+          .reviews
+            | map(select(.authorAssociation == "MEMBER" and .state == "CHANGES_REQUESTED"))
+            | max_by(.submittedAt | fromdateiso8601)
+            | .submittedAt
+        )
+        | if ((. | length) > 0) then . | fromdateiso8601 else 0 end
+      ),
+  last_approval:
+      (
+        (
+          .reviews
+            | map(select(.authorAssociation == "MEMBER" and .state == "APPROVED"))
             | max_by(.submittedAt | fromdateiso8601)
             | .submittedAt
         )

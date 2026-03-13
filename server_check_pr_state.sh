@@ -4,6 +4,7 @@ topN=200
 print_pr_url=0
 fetch_pr_list=1
 delete_cache_files=1
+skip_prs=""
 
 helpFunction()
 {
@@ -13,6 +14,7 @@ helpFunction()
    echo "\t-u Print PR URLs instead of just number"
    echo "\t-n do not fetch PR list. rely on local files"
    echo "\t-f do not delete local cache files"
+   echo "\t-s Skip the PRs mentioned in this list. Takes an argument a list of PR numbers"
    echo "\t-? Help."
    exit 1 # Exit script after printing help
 }
@@ -29,13 +31,14 @@ get_script_dir() {
     echo "$DIR"
 }
 
-while getopts "t:u?fn" opt
+while getopts "t:u?fns:" opt
 do
    case "$opt" in
       t ) topN="$OPTARG" ;;
       u ) print_pr_url=1 ;;
       n ) fetch_pr_list=0 ;;
       f ) delete_cache_files=0 ;;
+      s ) skip_prs="$OPTARG" ;;
       ? ) helpFunction ;; # Print helpFunction in case parameter is non-existent
    esac
 done
@@ -70,6 +73,8 @@ done
             days_since_last_update=$(echo "$pr" | jq -r '.days_since_last_update')
             last_comment_by_me=$(echo "$pr" | jq -r '.last_comment_by_me')
             last_comment_by_author=$(echo "$pr" | jq -r '.last_comment_by_author')
+            last_changes_requested=$(echo "$pr" | jq -r '.last_changes_requested')
+            last_approval=$(echo "$pr" | jq -r '.last_approval')
             state=''
             comment=''
             failure=''
@@ -81,6 +86,10 @@ done
             approved=$((approved_by_me + approved_by_others))
             n_states=0
 
+            if [[ $skip_prs == *$pr_number* ]]; then
+              continue
+            fi
+
             if [[ -z "$mdev" ]]; then
               state="NO MDEV"
               comment="Add the MDEV-NNNNN prefix"
@@ -89,24 +98,16 @@ done
               fi
               n_states=$((n_states +1))
             else
-              # get the MDEV state
-
-              curl -s --header @/Users/gkodinov/.jira.mariadb.org/curl_headers.txt https://jira.mariadb.org/rest/api/2/issue/MDEV-$mdev | jq '{ status: .fields.status.name, assignee: .fields.assignee.emailAddress}' > mdev.json
-              jira_status=$(cat mdev.json | jq -r '.status')
-              jira_assignee=$(cat mdev.json | jq -r '.assignee')
-              if [[ $delete_cache_files -gt 0 ]]; then
-                rm mdev.json
-              fi
-              if [[ -z "$jira_status" ]]; then
-                failure="$failure ### No Jira status ###"
-                action="fix the script"
-              fi
-
               # set the state
 
-              if [[ $approved_by_me -gt 0 && $approved_by_others -gt 0 && $request_count -eq 0 ]]; then
+              if [[ $approved_by_me -gt 0 && $approved_by_others -gt 0 && $request_count -eq 0 && $last_approval > $last_changes_requested ]]; then
                 state="APPROVED"
                 action="$action Push, Push, Push"
+                n_states=$((n_states +1))
+              fi
+              if [[ $approved_by_me -gt 0 && $approved_by_others -gt 0 && $request_count -eq 0 && $last_approval < $last_changes_requested ]]; then
+                state="FINAL REVIEW"
+                comment="waiting for subsequent reviews"
                 n_states=$((n_states +1))
               fi
               if [[ $approved_by_me -eq 0 && $request_count_others -gt 0 ]]; then
@@ -182,9 +183,40 @@ done
                 n_states=$((n_states +1))
               fi
 
-              if [[ "$state" == "APPROVED" && "$jira_status" != "Approved" ]]; then
-                failure="$failure Jira status $jira_status doesn't match PR state APPROVED"
-                action="$action, update jira state to Approved"
+              if [[ -z "$failure" && "$state" == "APPROVED" ]]; then
+                # get the MDEV state and check it
+
+                curl -s --header \
+                    @/Users/gkodinov/.jira.mariadb.org/curl_headers.txt \
+                    https://jira.mariadb.org/rest/api/2/issue/MDEV-$mdev \
+                  | jq '{ status: .fields.status.name,
+                          assignee: .fields.assignee.emailAddress,
+                          days_since_update: (((now - ( .fields.updated | .[:19] | strptime("%Y-%m-%dT%T") | mktime)) / (24 *3600)) | round) }' > mdev.json
+                jira_status=$(cat mdev.json | jq -r '.status')
+                jira_assignee=$(cat mdev.json | jq -r '.assignee')
+                jira_days_since_update=$(cat mdev.json | jq -r '.days_since_update')
+                now_date_secs=`gdate +%s`
+                if [[ $delete_cache_files -gt 0 ]]; then
+                  rm mdev.json
+                fi
+                if [[ -z "$jira_status" ]]; then
+                  failure="$failure ### No Jira status ###"
+                  action="fix the script"
+                fi
+
+                if [[ "$state" == "APPROVED" && "$jira_status" == "In Testing" ]]; then
+                  action=""
+                  comment="Wait for testing to complete"
+                  state="IN_TESTING"
+                  if [[ $days_since_last_update -ge 21 && $jira_days_since_update -ge 21 ]]; then
+                    action="Nag the tester"
+                  fi
+                fi
+
+                if [[ "$state" == "APPROVED" && "$jira_status" != "Approved" ]]; then
+                  failure="$failure Jira status $jira_status doesn't match PR state APPROVED"
+                  action="$action, update jira state to Approved"
+                fi
               fi
             fi
 
@@ -198,10 +230,10 @@ done
                 printf "PR#%d: " "$pr_number"
               else
                 printf "https://github.com/MariaDB/server/pull/%d : " "$pr_number"
-                open "https://github.com/MariaDB/server/pull/$pr_number"
                 if [[ ! ( -z "$mdev" ) ]]; then
                   open "https://jira.mariadb.org/browse/MDEV-$mdev"
                 fi
+                open "https://github.com/MariaDB/server/pull/$pr_number"
               fi
             fi
 
@@ -221,7 +253,7 @@ done
               break # Exit due to topN
             fi
           done < prs.json
-          
+
           # final tally
           printf "%s visited, " "$n_prs"
           printf "%s failures, " "$n_failures"
