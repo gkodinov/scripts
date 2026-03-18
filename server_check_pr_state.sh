@@ -171,6 +171,20 @@ done
                 fi
                 n_states=$((n_states +1))
               fi
+              if [[ $request_count_me -gt 0 && $approved_by_me -gt 0 ]]; then
+                state="PRELIMINARY REVIEW RE-REQUESTED"
+                comment="re-do the preliminary review as requested"
+                action="$action re-do the preliminary review"
+                n_states=$((n_states +1))
+              fi
+              if [[ $request_count_others -gt 0 && $approved_by_others -gt 0 ]]; then
+                state="FINAL REVIEW RE-REQUESTED"
+                comment="ask the reviewer to re-do the final review as requested"
+                if [[ $days_since_last_update -ge 21 ]]; then
+                  action="$action, nag the final reviewer"
+                fi
+                n_states=$((n_states +1))
+              fi
 
               if [[ -z "$state" ]]; then
                 failure="$failure ###NO_STATE###"
