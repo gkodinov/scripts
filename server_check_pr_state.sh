@@ -110,7 +110,7 @@ done
                 comment="waiting for subsequent reviews"
                 n_states=$((n_states +1))
               fi
-              if [[ $approved_by_me -eq 0 && $request_count_others -gt 0 ]]; then
+              if [[ $approved -eq 0 && $request_count_others -gt 0 ]]; then
                 state="FINAL REVIEW"
                 comment="sans preliminary review, waiting for the final reviewer"
                 n_states=$((n_states +1))
@@ -163,7 +163,7 @@ done
                 fi
                 n_states=$((n_states +1))
               fi
-              if [[ $approved_by_me -gt 0 && $request_count_me -eq 0 && request_count_others -gt 0 ]]; then
+              if [[ $approved_by_me -gt 0 && $request_count_me -eq 0 && $request_count_others -gt 0 && $approved_by_others -eq 0 ]]; then
                 state="FINAL REVIEW"
                 comment="wait for the final review"
                 if [[ $days_since_last_update -ge 21 ]]; then
