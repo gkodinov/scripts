@@ -101,5 +101,6 @@
             | .submittedAt
         )
         | if ((. | length) > 0) then . | fromdateiso8601 else 0 end
-      )
+      ),
+  is_in_rework: .labels | map(select(.name == "Rework")) | length
 }

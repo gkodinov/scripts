@@ -52,7 +52,7 @@ done
               --search 'is:open is:pr label:"External Contribution" draft:false' \
               --limit 200 \
               -s all \
-              --json number,title,reviewRequests,reviews,updatedAt,author \
+              --json number,title,reviewRequests,reviews,updatedAt,author,labels \
               --jq '.[]' \
                > raw.json
           fi
@@ -75,19 +75,29 @@ done
             last_comment_by_author=$(echo "$pr" | jq -r '.last_comment_by_author')
             last_changes_requested=$(echo "$pr" | jq -r '.last_changes_requested')
             last_approval=$(echo "$pr" | jq -r '.last_approval')
+            is_in_rework=$(echo "$pr" | jq -r '.is_in_rework')
             state=''
             comment=''
             failure=''
             action=''
             jira_status=''
             jira_assignee=''
+
             request_count=$((request_count_me + request_count_others))
             reviewed=$((reviewed_by_me + reviewed_by_others))
             approved=$((approved_by_me + approved_by_others))
             n_states=0
 
             if [[ $skip_prs == *$pr_number* ]]; then
+               state="SKIPPED"
+               comment="Skipped from the command line"
               continue
+            fi
+
+            if [[ $is_in_rework -gt 0 ]]; then
+               state="IN REWORK"
+               comment="In internal rework. Skipping"
+               continue
             fi
 
             if [[ -z "$mdev" ]]; then
