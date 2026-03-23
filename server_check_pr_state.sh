@@ -169,7 +169,7 @@ done
                 state="PRELIMINARY REVIEW DONE"
                 comment="assign final reviewer"
                 if [[ $days_since_last_update -ge 21 ]]; then
-                  action="$action, assign final reviewer"
+                  action="$action, nag the final reviewer"
                 fi
                 n_states=$((n_states +1))
               fi
