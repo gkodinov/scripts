@@ -207,7 +207,12 @@ done
                 n_states=$((n_states +1))
               fi
 
-              if [[ -z "$failure" && "$state" == "APPROVED" ]]; then
+              if [[ -z "$failure" && \
+                   ( \
+                     "$state" == "APPROVED" || \
+                     "$state" == "FINAL REVIEW RE-REQUESTED" \
+                   ) \
+                 ]]; then
                 # get the MDEV state and check it
 
                 curl -s --header \
@@ -215,7 +220,13 @@ done
                     https://jira.mariadb.org/rest/api/2/issue/MDEV-$mdev \
                   | jq '{ status: .fields.status.name,
                           assignee: .fields.assignee.emailAddress,
-                          days_since_update: (((now - ( .fields.updated | .[:19] | strptime("%Y-%m-%dT%T") | mktime)) / (24 *3600)) | round) }' > mdev.json
+                          days_since_update:
+                            ((
+                                (now -
+                                 ( .fields.updated | .[:19] | strptime("%Y-%m-%dT%T") | mktime)
+                                ) /
+                                (24 *3600)
+                             ) | round) }' > mdev.json
                 jira_status=$(cat mdev.json | jq -r '.status')
                 jira_assignee=$(cat mdev.json | jq -r '.assignee')
                 jira_days_since_update=$(cat mdev.json | jq -r '.days_since_update')
@@ -228,7 +239,12 @@ done
                   action="fix the script"
                 fi
 
-                if [[ "$state" == "APPROVED" && "$jira_status" == "In Testing" ]]; then
+                if [[ "$jira_status" == "In Testing" && \
+                      ( \
+                        "$state" == "APPROVED" || \
+                        "$state" == "FINAL REVIEW RE-REQUESTED" \
+                      ) \
+                   ]]; then
                   action=""
                   comment="Wait for testing to complete"
                   state="IN_TESTING"
