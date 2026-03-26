@@ -210,6 +210,7 @@ done
               if [[ -z "$failure" && \
                    ( \
                      "$state" == "APPROVED" || \
+                     "$state" == "FINAL REVIEW" || \
                      "$state" == "FINAL REVIEW RE-REQUESTED" \
                    ) \
                  ]]; then
@@ -239,6 +240,16 @@ done
                   action="fix the script"
                 fi
 
+                if [[ "$jira_status" != "In Review" && "$jira_status" != "In Testing" && \
+                      ( \
+                        "$state" == "FINAL REVIEW" || \
+                        "$state" == "FINAL REVIEW RE-REQUESTED" \
+                      ) \
+                   ]]; then
+                  action="$action, update Jira state to 'In Testing'"
+                  failure="$failure Jira status $jira_status doesn't match PR state $state"
+                  comment=""
+                fi
                 if [[ "$jira_status" == "In Testing" && \
                       ( \
                         "$state" == "APPROVED" || \
