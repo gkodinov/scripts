@@ -81,7 +81,8 @@ done
             failure=''
             action=''
             jira_status=''
-            jira_assignee=''
+            jira_assignee_name=''
+            jira_assignee_email=''
 
             request_count=$((request_count_me + request_count_others))
             reviewed=$((reviewed_by_me + reviewed_by_others))
@@ -220,7 +221,7 @@ done
                     @/Users/gkodinov/.jira.mariadb.org/curl_headers.txt \
                     https://jira.mariadb.org/rest/api/2/issue/MDEV-$mdev \
                   | jq '{ status: .fields.status.name,
-                          assignee: .fields.assignee.emailAddress,
+                          assignee: .fields.assignee,
                           days_since_update:
                             ((
                                 (now -
@@ -229,7 +230,8 @@ done
                                 (24 *3600)
                              ) | round) }' > mdev.json
                 jira_status=$(cat mdev.json | jq -r '.status')
-                jira_assignee=$(cat mdev.json | jq -r '.assignee')
+                jira_assignee_email=$(cat mdev.json | jq -r '.assignee.emailAddress')
+                jira_assignee_name=$(cat mdev.json | jq -r '.assignee.name')
                 jira_days_since_update=$(cat mdev.json | jq -r '.days_since_update')
                 now_date_secs=`gdate +%s`
                 if [[ $delete_cache_files -gt 0 ]]; then
@@ -240,14 +242,26 @@ done
                   action="fix the script"
                 fi
 
-                if [[ "$jira_status" != "In Review" && "$jira_status" != "In Testing" && \
+                if [[ "$jira_assignee_name" != "gkodinov" && \
+                      "$jira_status" != "In Review" && "$jira_status" != "In Testing" && \
                       ( \
                         "$state" == "FINAL REVIEW" || \
                         "$state" == "FINAL REVIEW RE-REQUESTED" \
                       ) \
                    ]]; then
-                  action="$action, update Jira state to 'In Testing'"
-                  failure="$failure Jira status $jira_status doesn't match PR state $state"
+                  action="$action, update Jira state to 'In Testing' or 'In Review'"
+                  failure="$failure Jira status $jira_status assignee $jira_assignee_name doesn't match PR state $state"
+                  comment=""
+                fi
+                if [[ "$jira_assignee_name" == "gkodinov" && \
+                      "$jira_status" != "Stalled" && \
+                      ( \
+                        "$state" == "FINAL REVIEW" || \
+                        "$state" == "FINAL REVIEW RE-REQUESTED" \
+                      ) \
+                   ]]; then
+                  action="$action, update Jira state to 'In Testing' or 'In Review'"
+                  failure="$failure Jira status $jira_status assignee $jira_assignee_name doesn't match PR state $state"
                   comment=""
                 fi
                 if [[ "$jira_status" == "In Testing" && \
