@@ -69,6 +69,25 @@ CheckPRGenComments() {
   fi
 }
 
+CountBBPending() {
+  if [[ $fetch_pr_list -gt 0 ]]; then
+    /opt/homebrew/bin/gh pr list \
+      --repo "MariaDB/server" \
+      --search "id == $pr_number" \
+      --limit 1 \
+      -s all \
+      --json statusCheckRollup \
+      --jq '.[] | .statusCheckRollup | map(select(.state == "PENDING")) | length' \
+       > pr_pending.json
+  fi
+  local pending=''
+  read -r pending < pr_pending.json
+  if [[ $delete_cache_files -gt 0 ]]; then
+    rm pr_pending.json
+  fi
+  echo $pending
+}
+
 while getopts "t:u?fns:i:" opt
 do
    case "$opt" in
@@ -156,7 +175,14 @@ done
 
               if [[ $approved_by_me -gt 0 && $approved_by_others -gt 0 && $request_count -eq 0 && $last_approval > $last_changes_requested ]]; then
                 state="APPROVED"
-                action="$action Push, Push, Push"
+                pending=$(CountBBPending)
+                if [[ pending -eq 0 ]]; then
+                  action="$action Push, Push, Push"
+                fi
+                hrs_since_last_approval=$(((now_date_secs - $last_approval) / 60 / 60))
+                if [[ $hrs_since_last_approval -gt 48 ]]; then
+                  action="$action Check the Buildbot hosts"
+                fi
                 n_states=$((n_states +1))
               fi
               if [[ $approved_by_me -gt 0 && $approved_by_others -gt 0 && $request_count -eq 0 && $last_approval < $last_changes_requested ]]; then
