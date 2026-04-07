@@ -37,10 +37,10 @@ CheckPRGenComments() {
   if [[ $fetch_pr_list -gt 0 ]]; then
     /opt/homebrew/bin/gh pr list \
       --repo "MariaDB/server" \
-      --search 'id == $search' \
+      --search "id == $pr_number" \
       --limit 1 \
       -s all \
-      --json comments \
+      --json number,author,comments \
       --jq '.[]' \
        > raw_comments.json
   fi
