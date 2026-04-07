@@ -33,6 +33,42 @@ get_script_dir() {
     echo "$DIR"
 }
 
+CheckPRGenComments() {
+  if [[ $fetch_pr_list -gt 0 ]]; then
+    /opt/homebrew/bin/gh pr list \
+      --repo "MariaDB/server" \
+      --search 'id == $search' \
+      --limit 1 \
+      -s all \
+      --json comments \
+      --jq '.[]' \
+       > raw_comments.json
+  fi
+  cat raw_comments.json | jq -c -f $script_dir/server_check_pr_state_comments.jq > pr_comments.json
+  local pr=''
+  read -r pr < pr_comments.json
+  if [[ $delete_cache_files -gt 0 ]]; then
+    rm pr_comments.json
+    rm raw_comments.json
+  fi
+  local last_gen_comment_by_me=$(echo "$pr" | jq -r '.last_gen_comment_by_me')
+  local last_gen_comment_by_author=$(echo "$pr" | jq -r '.last_gen_comment_by_author')
+  local last_by_me=$last_comment_by_me
+  if [[ $last_gen_comment_by_me -gt $last_comment_by_me ]]; then
+    local last_by_me=$last_gen_comment_by_me
+  fi
+  last_by_author=$last_comment_by_author
+  if [[ $last_gen_comment_by_author -gt $last_comment_by_author ]]; then
+    local last_by_author=$last_gen_comment_by_author
+  fi
+
+  if [[ $last_by_me -gt $last_by_author ]]; then
+    echo 1
+  else
+    echo 0
+  fi
+}
+
 while getopts "t:u?fns:i:" opt
 do
    case "$opt" in
@@ -59,7 +95,7 @@ done
               --search "$filter" \
               --limit 200 \
               -s all \
-              --json number,title,reviewRequests,reviews,updatedAt,author,labels,comments \
+              --json number,title,reviewRequests,reviews,updatedAt,author,labels \
               --jq '.[]' \
                > raw.json
           fi
@@ -83,8 +119,6 @@ done
             last_changes_requested=$(echo "$pr" | jq -r '.last_changes_requested')
             last_approval=$(echo "$pr" | jq -r '.last_approval')
             is_in_rework=$(echo "$pr" | jq -r '.is_in_rework')
-            last_gen_comment_by_me=$(echo "$pr" | jq -r '.last_gen_comment_by_me')
-            last_gen_comment_by_author=$(echo "$pr" | jq -r '.last_gen_comment_by_author')
             state=''
             comment=''
             failure=''
@@ -96,14 +130,6 @@ done
             request_count=$((request_count_me + request_count_others))
             reviewed=$((reviewed_by_me + reviewed_by_others))
             approved=$((approved_by_me + approved_by_others))
-            last_by_me=$last_comment_by_me
-            if [[ $last_gen_comment_by_me -gt $last_comment_by_me ]]; then
-              last_by_me=$last_gen_comment_by_me
-            fi
-            last_by_author=$last_comment_by_author
-            if [[ $last_gen_comment_by_author -gt $last_comment_by_author ]]; then
-              last_by_author=$last_gen_comment_by_author
-            fi
             n_states=0
 
             if [[ $skip_prs == *$pr_number* ]]; then
@@ -160,7 +186,8 @@ done
               fi
               if [[ $approved -eq 0 && $request_count -eq 0 && $reviewed_by_me -gt 0 ]]; then
                 state="PRELIMINARY REVIEW"
-                if [[ $last_by_me -gt $last_by_author ]]; then
+                pr_comment_result=$(CheckPRGenComments)
+                if [[ $pr_comment_result -gt 0 ]]; then
                   comment="Waiting for the submitter to reply"
                   if [[ $days_since_last_update -ge 21 ]]; then
                     action="$action Nag the submitter"
