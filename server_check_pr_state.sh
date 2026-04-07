@@ -5,6 +5,7 @@ print_pr_url=0
 fetch_pr_list=1
 delete_cache_files=1
 skip_prs=""
+do_pr=""
 
 helpFunction()
 {
@@ -15,6 +16,7 @@ helpFunction()
    echo "\t-n do not fetch PR list. rely on local files"
    echo "\t-f do not delete local cache files"
    echo "\t-s Skip the PRs mentioned in this list. Takes an argument a list of PR numbers"
+   echo "\t-i Filter only this PR. Takes the ID as an argument"
    echo "\t-? Help."
    exit 1 # Exit script after printing help
 }
@@ -31,7 +33,7 @@ get_script_dir() {
     echo "$DIR"
 }
 
-while getopts "t:u?fns:" opt
+while getopts "t:u?fns:i:" opt
 do
    case "$opt" in
       t ) topN="$OPTARG" ;;
@@ -39,6 +41,7 @@ do
       n ) fetch_pr_list=0 ;;
       f ) delete_cache_files=0 ;;
       s ) skip_prs="$OPTARG" ;;
+      i ) do_pr="$OPTARG" ;;
       ? ) helpFunction ;; # Print helpFunction in case parameter is non-existent
    esac
 done
@@ -46,13 +49,17 @@ done
 
           script_dir=$(get_script_dir)
           set -euo pipefail
+          filter='is:open is:pr label:"External Contribution" draft:false'
+          if [[ $do_pr -gt 0 ]]; then
+            filter+=" id == $do_pr"
+          fi
           if [[ $fetch_pr_list -gt 0 ]]; then
             /opt/homebrew/bin/gh pr list \
               --repo "MariaDB/server" \
-              --search 'is:open is:pr label:"External Contribution" draft:false' \
+              --search "$filter" \
               --limit 200 \
               -s all \
-              --json number,title,reviewRequests,reviews,updatedAt,author,labels \
+              --json number,title,reviewRequests,reviews,updatedAt,author,labels,comments \
               --jq '.[]' \
                > raw.json
           fi
@@ -76,6 +83,8 @@ done
             last_changes_requested=$(echo "$pr" | jq -r '.last_changes_requested')
             last_approval=$(echo "$pr" | jq -r '.last_approval')
             is_in_rework=$(echo "$pr" | jq -r '.is_in_rework')
+            last_gen_comment_by_me=$(echo "$pr" | jq -r '.last_gen_comment_by_me')
+            last_gen_comment_by_author=$(echo "$pr" | jq -r '.last_gen_comment_by_author')
             state=''
             comment=''
             failure=''
@@ -87,6 +96,14 @@ done
             request_count=$((request_count_me + request_count_others))
             reviewed=$((reviewed_by_me + reviewed_by_others))
             approved=$((approved_by_me + approved_by_others))
+            last_by_me=$last_comment_by_me
+            if [[ $last_gen_comment_by_me -gt $last_comment_by_me ]]; then
+              last_by_me=$last_gen_comment_by_me
+            fi
+            last_by_author=$last_comment_by_author
+            if [[ $last_gen_comment_by_author -gt $last_comment_by_author ]]; then
+              last_by_author=$last_gen_comment_by_author
+            fi
             n_states=0
 
             if [[ $skip_prs == *$pr_number* ]]; then
@@ -143,7 +160,7 @@ done
               fi
               if [[ $approved -eq 0 && $request_count -eq 0 && $reviewed_by_me -gt 0 ]]; then
                 state="PRELIMINARY REVIEW"
-                if [[ $last_comment_by_me -gt $last_comment_by_author ]]; then
+                if [[ $last_by_me -gt $last_by_author ]]; then
                   comment="Waiting for the submitter to reply"
                   if [[ $days_since_last_update -ge 21 ]]; then
                     action="$action Nag the submitter"
