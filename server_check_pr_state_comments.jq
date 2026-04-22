@@ -1,9 +1,9 @@
 {
   last_gen_comment_by_author:
       (
-        (
+        ( . as $parent |
           .comments
-            | map(. as $parent | select(.author.login == $parent.author.login))
+            | map(select(.author.login == $parent.author.login))
             | max_by(.createdAt | fromdateiso8601)
             | .createdAt
         )

@@ -173,7 +173,8 @@ done
             else
               # set the state
 
-              if [[ $approved_by_me -gt 0 && $approved_by_others -gt 0 && $request_count -eq 0 && $last_approval > $last_changes_requested ]]; then
+              if [[ $approved_by_me -gt 0 && $approved_by_others -gt 0 && $request_count -eq 0 && \
+                    $last_approval > $last_changes_requested ]]; then
                 state="APPROVED"
                 pending=$(CountBBPending)
                 if [[ pending -eq 0 ]]; then
@@ -185,7 +186,8 @@ done
                 fi
                 n_states=$((n_states +1))
               fi
-              if [[ $approved_by_me -gt 0 && $approved_by_others -gt 0 && $request_count -eq 0 && $last_approval < $last_changes_requested ]]; then
+              if [[ $approved_by_me -gt 0 && $approved_by_others -gt 0 && $request_count -eq 0 && \
+                    $last_approval < $last_changes_requested ]]; then
                 state="FINAL REVIEW"
                 comment="waiting for subsequent reviews"
                 n_states=$((n_states +1))
@@ -236,19 +238,36 @@ done
                 action="$action Push, Push, Push"
                 n_states=$((n_states +1))
               fi
-              if [[ $approved_by_me -gt 0 && $approved_by_others -eq 0 && request_count -eq 0 ]]; then
+              if [[ $approved_by_me -gt 0 && $approved_by_others -eq 0 && request_count -eq 0 && \
+                    $reviewed_by_others -eq 0 && $last_changes_requested -lt $last_approval ]]; then
                 state="PRELIMINARY REVIEW DONE"
-                comment="assign final reviewer"
+                action="assign final reviewer"
+                n_states=$((n_states +1))
+              fi
+              if [[ $approved_by_me -gt 0 && $approved_by_others -eq 0 && request_count -eq 0 && \
+                    $reviewed_by_others -gt 0 && $last_changes_requested -lt $last_approval ]]; then
+                state="FINAL REVIEW"
+                comment="with review rounds, waiting for the final review to complete"
+                if [[ $days_since_last_update -ge 21 ]]; then
+                  action="$action, check why isn't the review complete"
+                fi
+                n_states=$((n_states +1))
+              fi
+              if [[ $approved_by_me -gt 0 && $request_count_me -eq 0 && $request_count_others -gt 0 && \
+                    $approved_by_others -eq 0 ]]; then
+                state="FINAL REVIEW"
+                comment="wait for the final review"
                 if [[ $days_since_last_update -ge 21 ]]; then
                   action="$action, nag the final reviewer"
                 fi
                 n_states=$((n_states +1))
               fi
-              if [[ $approved_by_me -gt 0 && $request_count_me -eq 0 && $request_count_others -gt 0 && $approved_by_others -eq 0 ]]; then
+              if [[ $approved_by_me -gt 0 && $approved_by_others -eq 0 && request_count -eq 0 && \
+                    $last_changes_requested -gt $last_comment_by_author ]]; then
                 state="FINAL REVIEW"
-                comment="wait for the final review"
+                comment="waiting on the submitter"
                 if [[ $days_since_last_update -ge 21 ]]; then
-                  action="$action, nag the final reviewer"
+                  action="$action, nag the submitter"
                 fi
                 n_states=$((n_states +1))
               fi
