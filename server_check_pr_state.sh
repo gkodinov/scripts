@@ -171,35 +171,11 @@ done
               fi
               n_states=$((n_states +1))
             else
+
               # set the state
 
-              if [[ $approved_by_me -gt 0 && $approved_by_others -gt 0 && $request_count -eq 0 && \
-                    $last_approval > $last_changes_requested ]]; then
-                state="APPROVED"
-                pending=$(CountBBPending)
-                if [[ pending -eq 0 ]]; then
-                  action="$action Push, Push, Push"
-                fi
-                hrs_since_last_approval=$(((now_date_secs - $last_approval) / 60 / 60))
-                if [[ $hrs_since_last_approval -gt 48 ]]; then
-                  action="$action Check the Buildbot hosts"
-                fi
-                n_states=$((n_states +1))
-              fi
-              if [[ $approved_by_me -gt 0 && $approved_by_others -gt 0 && $request_count -eq 0 && \
-                    $last_approval < $last_changes_requested ]]; then
-                state="FINAL REVIEW"
-                comment="waiting for subsequent reviews"
-                n_states=$((n_states +1))
-              fi
-              if [[ $approved -eq 0 && $request_count_others -gt 0 ]]; then
-                state="FINAL REVIEW"
-                comment="sans preliminary review, waiting for the final reviewer"
-                n_states=$((n_states +1))
-                if [[ $days_since_last_update -ge 21 ]]; then
-                  action='Nag final reviewer'
-                fi
-              fi
+              # Open
+
               if [[ $approved -eq 0 && $request_count -eq 0 && $reviewed -eq 0 ]]; then
                 state="OPEN"
                 comment="need preliminary review"
@@ -212,6 +188,9 @@ done
                 action="$action Do preliminary review"
                 n_states=$((n_states +1))
               fi
+
+              # preliminary review
+
               if [[ $approved -eq 0 && $request_count -eq 0 && $reviewed_by_me -gt 0 ]]; then
                 state="PRELIMINARY REVIEW"
                 pr_comment_result=$(CheckPRGenComments)
@@ -232,17 +211,52 @@ done
                 action='Reply to the preliminary review request'
                 n_states=$((n_states +1))
               fi
-              if [[ $approved_by_me -eq 0 && $approved_by_others -gt 0 && $request_count -eq 0 ]]; then
-                state="APPROVED"
-                comment="sans preliminary review"
-                action="$action Push, Push, Push"
+              if [[ $request_count_me -gt 0 && $approved_by_me -gt 0 ]]; then
+                state="PRELIMINARY REVIEW RE-REQUESTED"
+                comment="re-do the preliminary review as requested"
+                action="$action re-do the preliminary review"
                 n_states=$((n_states +1))
               fi
+              if [[ $request_count -eq 0 && $last_changes_requested -gt $last_approval && \
+                    $approved_by_me -eq 0 && $approved_by_others -gt 0 ]]; then
+                state="PRELIMINARY REVIEW"
+                pr_comment_result=$(CheckPRGenComments)
+                if [[ $pr_comment_result -gt 0 ]]; then
+                  comment="after the secondary review. Waiting for the submitter to reply"
+                  if [[ $days_since_last_update -ge 21 ]]; then
+                    action="$action Nag the submitter"
+                  fi
+                else
+                  comment="after the secondary review. Submitter replied"
+                  action="$action Reply to the submitter"
+                fi
+                n_states=$((n_states +1))
+              fi
+
+              # preliminary review done 
+
               if [[ $approved_by_me -gt 0 && $approved_by_others -eq 0 && request_count -eq 0 && \
                     $reviewed_by_others -eq 0 && $last_changes_requested -lt $last_approval ]]; then
                 state="PRELIMINARY REVIEW DONE"
                 action="assign final reviewer"
                 n_states=$((n_states +1))
+              fi
+
+              # Final review
+
+              if [[ $approved_by_me -gt 0 && $approved_by_others -gt 0 && $request_count -eq 0 && \
+                    $last_approval -lt $last_changes_requested ]]; then
+                state="FINAL REVIEW"
+                comment="waiting for subsequent reviews"
+                n_states=$((n_states +1))
+              fi
+              if [[ $approved -eq 0 && $request_count_others -gt 0 ]]; then
+                state="FINAL REVIEW"
+                comment="sans preliminary review, waiting for the final reviewer"
+                n_states=$((n_states +1))
+                if [[ $days_since_last_update -ge 21 ]]; then
+                  action='Nag final reviewer'
+                fi
               fi
               if [[ $approved_by_me -gt 0 && $approved_by_others -eq 0 && request_count -eq 0 && \
                     $reviewed_by_others -gt 0 && $last_changes_requested -lt $last_approval ]]; then
@@ -271,12 +285,6 @@ done
                 fi
                 n_states=$((n_states +1))
               fi
-              if [[ $request_count_me -gt 0 && $approved_by_me -gt 0 ]]; then
-                state="PRELIMINARY REVIEW RE-REQUESTED"
-                comment="re-do the preliminary review as requested"
-                action="$action re-do the preliminary review"
-                n_states=$((n_states +1))
-              fi
               if [[ $request_count_others -gt 0 && $approved_by_others -gt 0 ]]; then
                 state="FINAL REVIEW RE-REQUESTED"
                 comment="ask the reviewer to re-do the final review as requested"
@@ -285,6 +293,27 @@ done
                 fi
                 n_states=$((n_states +1))
               fi
+
+              # Approved
+
+              if [[ $approved_by_others -gt 0 && $request_count -eq 0 && \
+                    $last_approval -gt $last_changes_requested ]]; then
+                state="APPROVED"
+                if [[ $approved_by_me -eq 0 ]]; then
+                  comment="sans preliminary review"
+                fi
+                pending=$(CountBBPending)
+                if [[ pending -eq 0 ]]; then
+                  action="$action Push, Push, Push"
+                fi
+                hrs_since_last_approval=$(((now_date_secs - $last_approval) / 60 / 60))
+                if [[ $hrs_since_last_approval -gt 48 ]]; then
+                  action="$action Check the Buildbot hosts"
+                fi
+                n_states=$((n_states +1))
+              fi
+
+              ############## State machine done
 
               if [[ -z "$state" ]]; then
                 failure="$failure ###NO_STATE###"
