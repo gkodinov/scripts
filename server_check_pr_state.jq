@@ -82,21 +82,51 @@
         )
         | if ((. | length) > 0) then . | fromdateiso8601 else 0 end
       ),
-  last_changes_requested:
+  last_comment_by_others:
       (
         (
           .reviews
-            | map(select(.authorAssociation == "MEMBER" and .state == "CHANGES_REQUESTED"))
+            | map(select(.authorAssociation == "MEMBER" and .author.login != "gkodinov"))
             | max_by(.submittedAt | fromdateiso8601)
             | .submittedAt
         )
         | if ((. | length) > 0) then . | fromdateiso8601 else 0 end
       ),
-  last_approval:
+  last_changes_requested_by_others:
       (
         (
           .reviews
-            | map(select(.authorAssociation == "MEMBER" and .state == "APPROVED"))
+            | map(select(.author.login != "gkodinov" and .authorAssociation == "MEMBER" and .state == "CHANGES_REQUESTED"))
+            | max_by(.submittedAt | fromdateiso8601)
+            | .submittedAt
+        )
+        | if ((. | length) > 0) then . | fromdateiso8601 else 0 end
+      ),
+  last_changes_requested_by_me:
+      (
+        (
+          .reviews
+            | map(select(.author.login == "gkodinov" and .authorAssociation == "MEMBER" and .state == "CHANGES_REQUESTED"))
+            | max_by(.submittedAt | fromdateiso8601)
+            | .submittedAt
+        )
+        | if ((. | length) > 0) then . | fromdateiso8601 else 0 end
+      ),
+  last_approval_by_me:
+      (
+        (
+          .reviews
+            | map(select(.author.login == "gkodinov" and .authorAssociation == "MEMBER" and .state == "APPROVED"))
+            | max_by(.submittedAt | fromdateiso8601)
+            | .submittedAt
+        )
+        | if ((. | length) > 0) then . | fromdateiso8601 else 0 end
+      ),
+  last_approval_by_others:
+      (
+        (
+          .reviews
+            | map(select(.author.login != "gkodinov" and .authorAssociation == "MEMBER" and .state == "APPROVED"))
             | max_by(.submittedAt | fromdateiso8601)
             | .submittedAt
         )
