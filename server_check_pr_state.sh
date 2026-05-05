@@ -112,7 +112,6 @@ done
             /opt/homebrew/bin/gh pr list \
               --repo "MariaDB/server" \
               --search "$filter" \
-              --limit 200 \
               -s all \
               --json number,title,reviewRequests,reviews,updatedAt,author,labels \
               --jq '.[]' \
@@ -241,10 +240,11 @@ done
                 pending=$(CountBBPending)
                 if [[ pending -eq 0 ]]; then
                   action="$action Push, Push, Push"
-                fi
-                hrs_since_last_approval=$(((now_date_secs - $last_approval) / 60 / 60))
-                if [[ $hrs_since_last_approval -gt 48 ]]; then
-                  action="$action Check the Buildbot hosts"
+                else
+                  hrs_since_last_approval=$(((now_date_secs - $last_approval) / 60 / 60))
+                  if [[ $hrs_since_last_approval -gt 48 ]]; then
+                    action="$action Check the Buildbot hosts"
+                  fi
                 fi
               else
                 comment="waiting for the submitter"

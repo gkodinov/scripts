@@ -75,8 +75,9 @@
   last_comment_by_author:
       (
         (
+          . as $parent |
           .reviews
-            | map(select(.authorAssociation == "CONTRIBUTOR"))
+            | map(select(.author.login == $parent.author.login))
             | max_by(.submittedAt | fromdateiso8601)
             | .submittedAt
         )
