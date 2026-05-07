@@ -112,6 +112,7 @@ done
             /opt/homebrew/bin/gh pr list \
               --repo "MariaDB/server" \
               --search "$filter" \
+              --limit 300 \
               -s all \
               --json number,title,reviewRequests,reviews,updatedAt,author,labels \
               --jq '.[]' \
